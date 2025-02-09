@@ -1,0 +1,132 @@
+#include <iostream>
+#include <string>
+#include <vector>
+#include <ctime>
+#include <sstream>
+#include <iomanip>
+#include <openssl/sha.h>
+
+using namespace std;
+
+class Block {
+public:
+    int index;
+    string previousHash;
+    string timestamp;
+    string data;
+    string hash;
+    string calculateHash() const {
+        stringstream ss;
+        ss << index << previousHash << timestamp << data;
+        return sha256(ss.str());
+    }
+
+    Block(int idx, string prevHash, string data)
+        : index(idx), previousHash(prevHash), data(data) {
+        timestamp = currentDateTime();
+        hash = calculateHash();
+    }
+
+private:
+    string sha256(const string& str) const {
+        unsigned char hash[SHA256_DIGEST_LENGTH];
+        SHA256_CTX sha256_ctx;
+        SHA256_Init(&sha256_ctx);
+        SHA256_Update(&sha256_ctx, str.c_str(), str.length());
+        SHA256_Final(hash, &sha256_ctx);
+
+        stringstream ss;
+        for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+            ss << hex << setw(2) << setfill('0') << (int)hash[i];
+        }
+        return ss.str();
+    }
+
+    string currentDateTime() const {
+        time_t now = time(0);
+        struct tm tstruct;
+        char buf[80];
+        tstruct = *localtime(&now);
+        strftime(buf, sizeof(buf), "%Y-%m-%d %X", &tstruct);
+        return string(buf);
+    }
+};
+
+class Blockchain {
+private:
+    vector<Block> chain;
+    int difficulty = 2;
+
+    bool isValidNewBlock(const Block& newBlock, const Block& prevBlock) {
+        if (prevBlock.index + 1 != newBlock.index) {
+            cout << "Invalid index" << endl;
+            return false;
+        }
+        if (prevBlock.hash != newBlock.previousHash) {
+            cout << "Invalid previous hash" << endl;
+            return false;
+        }
+        if (newBlock.hash != newBlock.calculateHash()) {
+            cout << "Invalid hash" << endl;
+            return false;
+        }
+        return true;
+    }
+
+    bool isChainValid() {
+        for (int i = 1; i < chain.size(); i++) {
+            if (!isValidNewBlock(chain[i], chain[i - 1])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+public:
+    Blockchain() {
+        chain.push_back(Block(0, "0", "Genesis Block"));
+    }
+
+    void addBlock(const Block& newBlock) {
+        if (isValidNewBlock(newBlock, chain.back())) {
+            chain.push_back(newBlock);
+            cout << "Block added: " << newBlock.hash << endl;
+        } else {
+            cout << "Failed to add block" << endl;
+        }
+    }
+
+    void printBlockchain() {
+        for (const Block& block : chain) {
+            cout << "Block " << block.index << " [Hash: " << block.hash << "]" << endl;
+            cout << "Timestamp: " << block.timestamp << endl;
+            cout << "Data: " << block.data << endl;
+            cout << "Previous Hash: " << block.previousHash << endl;
+            cout << "---------------------------------" << endl;
+        }
+    }
+
+    bool validateBlockchain() {
+        return isChainValid();
+    }
+};
+
+int main() {
+    Blockchain myBlockchain;
+
+    Block block1(1, myBlockchain.getChain().back().hash, "First Block after Genesis");
+    myBlockchain.addBlock(block1);
+
+    Block block2(2, myBlockchain.getChain().back().hash, "Second Block");
+    myBlockchain.addBlock(block2);
+
+    myBlockchain.printBlockchain();
+
+    if (myBlockchain.validateBlockchain()) {
+        cout << "Blockchain is valid!" << endl;
+    } else {
+        cout << "Blockchain is invalid!" << endl;
+    }
+
+    return 0;
+}
